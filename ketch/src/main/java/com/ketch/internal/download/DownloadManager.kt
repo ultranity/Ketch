@@ -204,7 +204,8 @@ internal class DownloadManager(
 
     private suspend fun resume(id: Int) {
         val downloadEntity = downloadDao.find(id)
-        if (downloadEntity != null) {
+        if (downloadEntity != null && (downloadEntity.status!= Status.PROGRESS.toString() &&
+                downloadEntity.status!= Status.SUCCESS.toString())) {
             downloadDao.update(
                 downloadEntity.copy(
                     userAction = UserAction.RESUME.toString(),
