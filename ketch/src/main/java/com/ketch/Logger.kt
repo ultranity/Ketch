@@ -13,6 +13,10 @@ interface Logger {
     )
 }
 
+internal class NoneLogger : Logger {
+    override fun log(tag: String?, msg: String?, tr: Throwable?, type: LogType) {}
+}
+
 enum class LogType {
     VERBOSE,
     DEBUG,

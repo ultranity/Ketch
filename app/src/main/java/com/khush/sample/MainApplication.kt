@@ -3,7 +3,7 @@ package com.khush.sample
 import android.app.Application
 import com.ketch.DownloadConfig
 import com.ketch.Ketch
-import com.ketch.NotificationConfig
+import com.ketch.notification.NotificationConfig
 
 class MainApplication : Application() {
 

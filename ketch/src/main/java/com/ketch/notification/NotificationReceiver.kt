@@ -1,4 +1,4 @@
-package com.ketch.internal.notification
+package com.ketch.notification
 
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
@@ -13,7 +13,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.ketch.Ketch
 import com.ketch.internal.utils.DownloadConst
-import com.ketch.internal.utils.NotificationConst
 import com.ketch.internal.utils.TextUtil
 
 /**

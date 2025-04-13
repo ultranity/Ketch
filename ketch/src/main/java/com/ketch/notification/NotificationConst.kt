@@ -1,4 +1,4 @@
-package com.ketch.internal.utils
+package com.ketch.notification
 
 internal object NotificationConst {
     const val NOTIFICATION_CHANNEL_ID = "download_channel"

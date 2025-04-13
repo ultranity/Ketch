@@ -1,4 +1,4 @@
-package com.ketch.internal.notification
+package com.ketch.notification
 
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
@@ -10,13 +10,14 @@ import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.work.ForegroundInfo
-import com.ketch.NotificationConfig
 import com.ketch.internal.utils.DownloadConst
-import com.ketch.internal.utils.NotificationConst
 import com.ketch.internal.utils.TextUtil
-import com.ketch.internal.utils.WorkUtil.removeNotification
 
+fun removeNotification(context: Context, notificationId: Int) {
+    NotificationManagerCompat.from(context).cancel(notificationId)
+}
 /**
  * Download notification manager: Responsible for showing the in progress notification for each downloads.
  * Whenever the download is cancelled or paused or failed (terminating state), WorkManager cancels the

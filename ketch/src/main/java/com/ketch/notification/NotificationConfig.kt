@@ -1,7 +1,8 @@
-package com.ketch
+package com.ketch.notification
 
-import com.ketch.internal.utils.NotificationConst
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 @Serializable
 data class NotificationConfig(
@@ -13,4 +14,18 @@ data class NotificationConfig(
     val showSize: Boolean = true,
     val showTime: Boolean = true,
     val smallIcon: Int
-)
+) {
+    fun toJson(): String {
+        return Json.encodeToString(this)
+    }
+
+    companion object {
+        fun fromJson(jsonStr: String): NotificationConfig {
+            if (jsonStr.isEmpty()) {
+                return NotificationConfig(smallIcon = NotificationConst.DEFAULT_VALUE_NOTIFICATION_SMALL_ICON)
+            }
+            return Json.decodeFromString(jsonStr)
+        }
+
+    }
+}

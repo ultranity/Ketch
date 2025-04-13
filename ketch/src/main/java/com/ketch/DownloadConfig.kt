@@ -6,5 +6,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class DownloadConfig(
     val connectTimeOutInMs: Long = DownloadConst.DEFAULT_VALUE_CONNECT_TIMEOUT_MS,
-    val readTimeOutInMs: Long = DownloadConst.DEFAULT_VALUE_READ_TIMEOUT_MS
+    val readTimeOutInMs: Long = DownloadConst.DEFAULT_VALUE_READ_TIMEOUT_MS,
+    val renameWhenConflict: Boolean = DownloadConst.DEFAULT_VALUE_RENAME_WHEN_CONFLICT,
 )

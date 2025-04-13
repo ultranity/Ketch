@@ -1,4 +1,4 @@
-package com.ketch.internal.worker
+package com.ketch.internal.download
 
 import android.content.Context
 import androidx.work.CoroutineWorker
@@ -6,19 +6,15 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.ketch.Status
 import com.ketch.internal.database.DatabaseInstance
-import com.ketch.internal.download.ApiResponseHeaderChecker
-import com.ketch.internal.download.DownloadTask
 import com.ketch.internal.network.RetrofitInstance
-import com.ketch.internal.notification.DownloadNotificationManager
 import com.ketch.internal.utils.DownloadConst
 import com.ketch.internal.utils.ExceptionConst
 import com.ketch.internal.utils.FileUtil
 import com.ketch.internal.utils.UserAction
-import com.ketch.internal.utils.WorkUtil
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.io.File
 
 internal class DownloadWorker(
     private val context: Context,
@@ -30,23 +26,17 @@ internal class DownloadWorker(
         private const val MAX_PERCENT = 100
     }
 
-    private var downloadNotificationManager: DownloadNotificationManager? = null
     private val downloadDao = DatabaseInstance.getInstance(context).downloadDao()
 
+    @OptIn(DelicateCoroutinesApi::class)
     override suspend fun doWork(): Result {
 
-        val downloadRequest =
-            WorkUtil.jsonToDownloadRequest(
-                inputData.getString(DownloadConst.KEY_DOWNLOAD_REQUEST)
-                    ?: return Result.failure(
-                        workDataOf(ExceptionConst.KEY_EXCEPTION to ExceptionConst.EXCEPTION_FAILED_DESERIALIZE)
-                    )
-            )
-
-        val notificationConfig =
-            WorkUtil.jsonToNotificationConfig(
-                inputData.getString(DownloadConst.KEY_NOTIFICATION_CONFIG) ?: ""
-            )
+        val downloadRequest = DownloadRequest.fromJson(
+            inputData.getString(DownloadConst.KEY_DOWNLOAD_REQUEST)
+                ?: return Result.failure(
+                    workDataOf(ExceptionConst.KEY_EXCEPTION to ExceptionConst.EXCEPTION_FAILED_DESERIALIZE)
+                )
+        )
 
         val id = downloadRequest.id
         val url = downloadRequest.url
@@ -55,24 +45,10 @@ internal class DownloadWorker(
         val headers = downloadRequest.headers
         val supportPauseResume = downloadRequest.supportPauseResume // in case of false, we will not store total length info in DB
 
-        if (notificationConfig.enabled) {
-            downloadNotificationManager = DownloadNotificationManager(
-                context = context,
-                notificationConfig = notificationConfig,
-                requestId = id,
-                fileName = fileName
-            )
-        }
 
         val downloadService = RetrofitInstance.getDownloadService()
 
         return try {
-            downloadNotificationManager?.sendUpdateNotification()?.let {
-                setForeground(
-                    it
-                )
-            }
-
             val latestETag =
                 ApiResponseHeaderChecker(downloadRequest.url, downloadService, headers)
                     .getHeaderValue(DownloadConst.ETAG_HEADER) ?: ""
@@ -82,9 +58,8 @@ internal class DownloadWorker(
             if (latestETag != existingETag) {
                 FileUtil.deleteFileIfExists(path = dirPath, name = fileName)
                 FileUtil.createTempFileIfNotExists(path = dirPath, fileName = fileName)
-                downloadDao.find(id)?.copy(
+                downloadDao.find(id)?.copyForModification(
                     eTag = latestETag,
-                    lastModified = System.currentTimeMillis()
                 )?.let { downloadDao.update(it) }
             }
 
@@ -100,10 +75,9 @@ internal class DownloadWorker(
                 headers = headers,
                 onStart = { length ->
 
-                    downloadDao.find(id)?.copy(
+                    downloadDao.find(id)?.copyForModification(
                         totalBytes = length,
                         status = Status.STARTED,
-                        lastModified = System.currentTimeMillis()
                     )?.let { downloadDao.update(it) }
 
                     setProgress(
@@ -124,11 +98,10 @@ internal class DownloadWorker(
 
                         progressPercentage = progress
 
-                        downloadDao.find(id)?.copy(
+                        downloadDao.find(id)?.copyForModification(
                             downloadedBytes = downloadedBytes,
                             speedInBytePerMs = speed,
                             status = Status.PROGRESS,
-                            lastModified = System.currentTimeMillis()
                         )?.let { downloadDao.update(it) }
 
                     }
@@ -139,78 +112,33 @@ internal class DownloadWorker(
                             DownloadConst.KEY_PROGRESS to progress
                         )
                     )
-                    downloadNotificationManager?.sendUpdateNotification(
-                        progress = progress,
-                        speedInBPerMs = speed,
-                        length = length,
-                        update = true
-                    )?.let {
-                        setForeground(
-                            it
-                        )
-                    }
                 }
             )
 
-            downloadDao.find(id)?.copy(
+            downloadDao.find(id)?.copyForModification(
                 totalBytes = totalLength,
                 status = Status.SUCCESS,
-                lastModified = System.currentTimeMillis()
             )?.let { downloadDao.update(it) }
 
-            downloadNotificationManager?.sendDownloadSuccessNotification(
-                totalLength = if (totalLength > 0) totalLength else File(dirPath, fileName).length()
-            )
             Result.success()
         } catch (e: Exception) {
             GlobalScope.launch {
                 if (e is CancellationException) {
                     if (downloadDao.find(id)?.userAction == UserAction.PAUSE) {
-
-                        downloadDao.find(id)?.copy(
+                        downloadDao.find(id)?.copyForModification(
                             status = Status.PAUSED,
-                            lastModified = System.currentTimeMillis()
                         )?.let { downloadDao.update(it) }
-                        val downloadEntity = downloadDao.find(id)
-                        if (downloadEntity != null) {
-                            val currentProgress = if (downloadEntity.totalBytes != 0L) {
-                                ((downloadEntity.downloadedBytes * MAX_PERCENT) / downloadEntity.totalBytes).toInt()
-                            } else {
-                                0
-                            }
-                            downloadNotificationManager?.sendDownloadPausedNotification(
-                                currentProgress = currentProgress
-                            )
-                        }
-
                     } else {
-
-                        downloadDao.find(id)?.copy(
+                        downloadDao.find(id)?.copyForModification(
                             status = Status.CANCELLED,
-                            lastModified = System.currentTimeMillis()
                         )?.let { downloadDao.update(it) }
                         FileUtil.deleteFileIfExists(dirPath, fileName)
-                        downloadNotificationManager?.sendDownloadCancelledNotification()
-
                     }
                 } else {
-
-                    downloadDao.find(id)?.copy(
+                    downloadDao.find(id)?.copyForModification(
                         status = Status.FAILED,
                         failureReason = e.message ?: "",
-                        lastModified = System.currentTimeMillis()
                     )?.let { downloadDao.update(it) }
-                    val downloadEntity = downloadDao.find(id)
-                    if (downloadEntity != null) {
-                        val currentProgress = if (downloadEntity.totalBytes != 0L) {
-                            ((downloadEntity.downloadedBytes * MAX_PERCENT) / downloadEntity.totalBytes).toInt()
-                        } else {
-                            0
-                        }
-                        downloadNotificationManager?.sendDownloadFailedNotification(
-                            currentProgress = currentProgress
-                        )
-                    }
                 }
             }
             Result.failure(
